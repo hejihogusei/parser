@@ -1,0 +1,31 @@
+[tool.poetry]
+name        = "parser"
+version     = "0.1.0"
+description = "Excel parser app with multi-feature"
+authors     = ["hogu <help@hejihogusei.app>"]
+readme      = "README.md"
+packages = [
+  { include = "parser", from = "src" }
+]
+
+[tool.poetry.scripts]
+parser       = "parser.__main__:main"
+
+[tool.poetry.dependencies]
+python           = ">=3.13,<3.14"
+pandas = "^2.2.3"
+openpyxl = "^3.1.5"
+pillow = "^11.2.1"
+python-dotenv = "^1.1.0"
+pyside6 = "^6.9.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest           = "*"
+pyinstaller = "^6.13.0"
+flake8 = "^7.2.0"
+black = "^25.1.0"
+mypy = "^1.15.0"
+
+[build-system]
+requires        = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend   = "poetry.core.masonry.api"

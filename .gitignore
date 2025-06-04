@@ -1,0 +1,28 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual env
+.venv/
+
+# Poetry
+
+# IDE
+.idea/
+
+# MACOS
+.DS_Store
+
+# BUILD
+build/*
+!build/.*
+dist/*
+!dist/.*
+logs/*
+!logs/.*
+temp/*
+!temp/.*
+
+
+
