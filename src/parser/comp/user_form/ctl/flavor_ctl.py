@@ -1,3 +1,4 @@
+# src/parser/comp/user_form/ctl/flavor_ctl.py
 class FlavorController:
     def __init__(self, combo, model):
         self.combo = combo

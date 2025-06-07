@@ -1,0 +1,23 @@
+#   ideabox
+
+# June 5
+- i need to brainstorm the whole idea.
+ui:
+- load file option
+- show file as in spreadsheets, show total number of rows
+- pre-processor: join children.
+    - analyze and show records which have multiple, show total number
+    - option to join children by creating extra row
+    - re-order with new rows
+    - show completion and new row count
+- pre-processor: pick only records from specific dates
+    - show range of dates
+    - let enter the new range
+    - show how many in that range
+    - provide action to enable the filter, show enabled filter in general section (together with row count)
+- give list of columns to chose and change order. like two columns, pick from one, put into another, move up/down
+- save file save dialog and option to name new or overwrite something else
+
+intent. the app loads raw xl file.
+as outcome it offloads another refined xl with only columns selected by the user.
+as interim processing, as pre-processor option, combine child records by creating new row.

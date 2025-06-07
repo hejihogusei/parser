@@ -1,27 +1,15 @@
-from PySide6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QPushButton, QFormLayout, QLineEdit, QSpinBox, QComboBox
-
-class UserForm(QWidget):
-    def __init__(self):
-        super().__init__()
-        self.name = QLineEdit()
-        self.age = QSpinBox()
-        self.age.setRange(0, 200)
-        self.icecream = QComboBox()
-        self.icecream.addItems(["Vanilla", "Strawberry", "Chocolate"])
-
-        layout = QFormLayout()
-        layout.addRow("Name", self.name)
-        layout.addRow("Age", self.age)
-        layout.addRow("Favorite Ice cream", self.icecream)
-
-        self.setLayout(layout)
+# src/parser/comp/user_form/view.py
+from PySide6.QtWidgets import (
+    QMainWindow, QWidget, QVBoxLayout, QPushButton,
+    QFormLayout, QLineEdit, QSpinBox, QComboBox
+)
 
 class MainWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, widget):
         super().__init__()
         self.setWindowTitle("User Form")
 
-        self.form = UserForm()
+        self.form = widget
         self.save_btn = QPushButton("Save")
         self.restore_btn = QPushButton("Restore")
 

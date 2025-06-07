@@ -1,13 +1,19 @@
+# src/parser/main.py
 from PySide6.QtWidgets import QApplication
 import sys
+from pathlib import Path
 
-from comp.user_form import UserFormWindow
+from comp.main import MainApp
 
 def main():
-    app = QApplication(sys.argv)
+    # Resolve path to project root
+    root_path = Path(__file__).resolve().parents[2]
+    excel_path = root_path / "temp" / "sheets_old.xlsx"
+    print(excel_path)
 
-    user_form = UserFormWindow()
-    user_form.show()
+    app = QApplication(sys.argv)
+    main_app = MainApp(excel_path=excel_path)
+    main_app.show()
 
     sys.exit(app.exec())
 

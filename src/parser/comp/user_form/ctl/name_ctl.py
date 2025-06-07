@@ -1,3 +1,4 @@
+# src/parser/comp/user_form/ctl/name_ctl.py
 class NameController:
     def __init__(self, line_edit, model):
         self.line_edit = line_edit
