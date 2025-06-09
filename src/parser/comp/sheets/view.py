@@ -2,12 +2,12 @@
 from PySide6.QtWidgets import QMainWindow, QApplication
 from PySide6.QtCore import Qt, QTimer
 
-class MainWindow(QMainWindow):
-    def __init__(self, form_widget):
+class SheetsView(QMainWindow):
+    def __init__(self, widget):
         super().__init__()
         self.setWindowTitle("Excel Viewer")
         self.setWindowFlag(Qt.WindowMinimizeButtonHint, True)
-        self.setCentralWidget(form_widget)
+        self.setCentralWidget(widget)
         self._centered = False
 
     def showEvent(self, event):
@@ -22,9 +22,3 @@ class MainWindow(QMainWindow):
         window_geometry = self.frameGeometry()
         window_geometry.moveCenter(screen_geometry.center())
         self.move(window_geometry.topLeft())
-
-
-
-
-
-

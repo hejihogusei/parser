@@ -7,11 +7,11 @@ class MainAppWindow(QMainWindow):
         self.setWindowTitle("Main Application")
 
         self.launch_user_form_btn = QPushButton("Open User Form")
-        self.launch_excel_btn = QPushButton("View Excel File")
+        self.launch_sheets_btn = QPushButton("View Excel File")
 
         layout = QVBoxLayout()
         layout.addWidget(self.launch_user_form_btn)
-        layout.addWidget(self.launch_excel_btn)
+        layout.addWidget(self.launch_sheets_btn)
 
         central = QWidget()
         central.setLayout(layout)

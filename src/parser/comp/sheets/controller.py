@@ -1,76 +1,63 @@
 # src/parser/comp/sheets/controller.py
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QTableWidgetItem, QTableWidget, QCheckBox, QWidget, QHBoxLayout
-from PySide6.QtGui import QFontMetrics
+from __future__ import annotations
+from PySide6.QtCore    import Qt
+from PySide6.QtWidgets import QTableWidget, QTableWidgetItem
+from .helper_table_sizer        import set_initial_sizing
+from .helper_tri_state          import TriStateDelegate, TRI_FLAG
+from .controller_nav            import NavigationController
+from .controller_visibility     import VisibilityController
+from .controller_cardview       import CardViewController
 
 
-class ExcelViewerController:
+class SheetsController:
+    COL_SELECT, COL_FIELD, COL_VALUE = range(3)
+
     def __init__(self, model, widget):
-        self.model = model
+        self.model  = model
         self.widget = widget
-        self.table = widget.table
-        self.hdr_height = 0
-        self.hdr = self.table.horizontalHeader()
+        self.tbl    = widget.table
+        self.tri_flag = TRI_FLAG
 
-        # set sizing
-        self.default_sizing()
+        self._setup_tri_state_delegate()
+        self._setup_initial_sizing()
+        self._setup_cardview()
+        self._setup_visibility_controller()
+        self._setup_navigation()
 
-        # Connect navigation buttons
-        self.widget.prev_btn.clicked.connect(self.on_prev)
-        self.widget.next_btn.clicked.connect(self.on_next)
+        self._refresh(model.rows.index)
 
-        # Load the first row
-        self.load_row()
+    # ─────────────────────────────────────────────────────────────
+    def _setup_tri_state_delegate(self):
+        delegate = TriStateDelegate(self.tbl, self.model)
+        self.tbl.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.tbl.setItemDelegateForColumn(self.COL_SELECT, delegate)
 
-    def default_sizing(self):
-        # set default sizing
-        def c2px(n: int, pad: int = 8) -> int:
-            fm: QFontMetrics = self.widget.fontMetrics()
-            return fm.horizontalAdvance('M' * n) + pad  # 'M' ≈ widest latin
-        self.hdr_height = self.hdr.height()
-        self.table.verticalHeader().setDefaultSectionSize(self.hdr_height)
-        min_width = c2px(self.model.title_width) + c2px(self.model.col_width)   # + self.table.columnWidth(0)
-        self.table.setMinimumWidth(min_width)
-        self.hdr.setStretchLastSection(True)
+    def _setup_initial_sizing(self):
+        set_initial_sizing(self.widget, self.model)
 
-    def on_prev(self):
-        self.model.prev()
-        self.load_row()
+    def _setup_cardview(self):
+        self.cardview_controller = CardViewController(self.tbl, self.model)
+        #self.cardview_controller.show_selected()
 
-    def on_next(self):
-        self.model.next()
-        self.load_row()
+    def _setup_visibility_controller(self):
+        self.toggle_ctrl = VisibilityController(
+            button=self.widget.toggle_show_btn,
+            table=self.tbl,
+            cardview_controller=self.cardview_controller
+        )
+        self.toggle_ctrl.install()
 
-    def load_row(self):
-        row, items  = self.model.current_row
-        if row is not None:
-            self.set_row(row, items)
+    def _setup_navigation(self):
+        self.nav = NavigationController(
+            self.model.rows,
+            self.widget.prev_btn,
+            self.widget.next_btn
+        )
+        self.nav.rowChanged.connect(self._refresh)
 
-    def set_row(self, row_series, items):
-        self.widget.table.setRowCount(len(items))
-        for i, (col, val) in enumerate(items):
-            self.widget.table.setItem(i, 1, QTableWidgetItem(str(col)))
-            self.widget.table.setItem(i, 2, QTableWidgetItem(str(val)))
-        self.resize_table_to_fit_rows()
-
-    def resize_table_to_fit_rows(self):
-        def calc_height(table):
-            total_height = sum(table.rowHeight(row) for row in range(table.rowCount()))
-            return total_height + self.hdr_height + 20
-
-        self.widget.table.resizeColumnsToContents()
-        self.widget.table.resizeRowsToContents()
-
-        height = calc_height(self.widget.table)
-        self.widget.table.setMinimumHeight(height)
-        self.widget.table.setMaximumHeight(height)
-
-        #if not self._table_width:
-        #    self._table_width = self.widget.table.size().width() * 1.5
-        #self.widget.table.setMinimumWidth(self._table_width)
-        #self.widget.table.setMaximumWidth(self._table_width)
-
-        # Optionally: Ask parent to update layout
-        self.widget.table.updateGeometry()
-        self.widget.updateGeometry()
-
+    # ─────────────────────────────────────────────────────────────
+    def _refresh(self, _idx: int) -> None:
+        if self.toggle_ctrl.show_mode:
+            self.cardview_controller.show_all()
+        else:
+            self.cardview_controller.show_selected()

@@ -1,4 +1,4 @@
-# src/parser/comp/sheets/card_mdl.py
+# src/parser/comp/sheets/model_card.py
 from __future__ import annotations
 
 import json
@@ -34,15 +34,14 @@ class _CardOrder:
 
     # internal mutators
     def _set_current(self, pos: int) -> None:
+        #   set new order position, store previous
         if pos != self._current:
             self._previous = self._current
             self._current = pos
 
     def _reset(self) -> None:
+        #   reset order position to previous
         self._current, self._previous = self._previous, self._current
-
-    def _drop(self, last: int) -> None:
-        self._set_current(last)
 
 
 # ───────────────────── Card ─────────────────────
@@ -91,41 +90,41 @@ class Card:
     def _move_to(self, pos: int) -> None:
         self._order._set_current(pos)
 
-    def _drop_to_end(self, last: int) -> None:
-        self._order._drop(last)
-
     def _restore_order(self) -> None:
         self._order._reset()
 
-    # serialisation -----------------------
+    # serialisation ----------------------------------------------------
     def to_dict(self) -> dict:
+        as_int = int        # shorthand
+
         return {
-            "id": self.id,
-            "title": self.title,
-            "show": self.show,
-            "disable": self.disabled,
+            "id":        as_int(self.id),
+            "title":     self.title,
+            "show":      self.show,
+            "disable":   self.disabled,
             "order": {
-                "default": self._order.default,
-                "current": self._order._current,
-                "previous": self._order._previous,
+                "default":  as_int(self._order.default),
+                "current":  as_int(self._order._current),
+                "previous": as_int(self._order._previous),
             },
-            "size": {"min": self.size.min, "avg": self.size.avg, "max": self.size.max},
+            "size": {
+                "min":  as_int(self.size.min),
+                "avg":  as_int(self.size.avg),
+                "max":  as_int(self.size.max),
+            },
         }
 
     def to_json(self, indent: int | None = 2) -> str:
-        return json.dumps(self.to_dict(), indent=indent)
+        return json.dumps(self.to_dict(), indent=indent, ensure_ascii=False)
 
-    # swap behaviour:  print(card)  ➜ short one-liner
-    #                  repr(card)   ➜ full JSON dump
-    def __str__(self) -> str:                      # print(...)
+    # print(card) → short one-liner, repr(card) → JSON
+    def __str__(self) -> str:
         return (
             f"<Card #{self.id} '{self.title}' "
-            f"state={self._state.name} order={self.order}>"
-            f"size={self.size}"
+            f"state={self._state.name} order={self.order} size={self.size}>"
         )
 
-    def __repr__(self) -> str:                     # repr(...)
-        return json.dumps(self.to_dict(), indent=2, ensure_ascii=False)
-
+    def __repr__(self) -> str:
+        return self.to_json(indent=2)
 
 __all__ = ["Card"]
