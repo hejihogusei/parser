@@ -60,10 +60,6 @@ class Card:
         return self._order._current
 
     @property
-    def is_visible(self) -> bool:
-        return self._state is _CardState.VISIBLE
-
-    @property
     def disabled(self) -> bool:
         return self._state is _CardState.DISABLED
 

@@ -1,0 +1,249 @@
+# src/parser/comp/sheets/model_api_table.py
+
+from PySide6.QtCore import (
+    Qt,
+    QAbstractTableModel,
+    QModelIndex,
+    QMimeData,
+    QSignalBlocker,
+)
+from .model import SheetsModel
+from .helper_tri_state import TRI_FLAG
+
+
+class CardTableQtModel(QAbstractTableModel):
+    """
+    Qt model wrapping SheetsModel:
+      • One row per Card.
+      • Columns: [tri‐state checkbox, Field title, Value].
+      • In “edit” (show_all) mode, supports drag-&-drop reordering
+        of *all* cards and preserves each Card’s .current/.previous.
+    """
+
+    def __init__(self, sheets_model: SheetsModel):
+        super().__init__()
+        self.sheets_model = sheets_model
+        self.cardtable    = sheets_model.cardtable
+        self._show_all    = False
+        self._drag_ids    = []
+
+        # keep the view in sync if order or visibility change elsewhere
+        self.cardtable.orderChanged.connect(self._reset_model)
+        self.cardtable.visibilityChanged.connect(self._reset_model)
+
+    # ─── Public API ────────────────────────────────────────
+
+    @property
+    def show_all(self) -> bool:
+        return self._show_all
+
+    @show_all.setter
+    def show_all(self, val: bool):
+        if val == self._show_all:
+            return
+        self._show_all = val
+        self._reset_model()
+
+    # ─── Model shape ───────────────────────────────────────
+
+    def rowCount(self, parent=QModelIndex()) -> int:
+        return sum(1 for _ in self.cardtable.visible_cards(self._show_all))
+
+    def columnCount(self, parent=QModelIndex()) -> int:
+        return 3
+
+    # ─── Data access ───────────────────────────────────────
+
+    def _card_by_row(self, row: int):
+        visible = sorted(
+            self.cardtable.visible_cards(self._show_all),
+            key=lambda c: c.order
+        )
+        return visible[row] if 0 <= row < len(visible) else None
+
+    def data(self, index: QModelIndex, role=Qt.DisplayRole):
+        if not index.isValid():
+            return None
+        card = self._card_by_row(index.row())
+        if card is None:
+            return None
+
+        # Column 0: tri-state checkbox
+        if index.column() == 0 and role == Qt.CheckStateRole:
+            return (
+                Qt.PartiallyChecked if card.disabled
+                else Qt.Checked      if card.show
+                else Qt.Unchecked
+            )
+
+        # Column 1: Field title
+        if index.column() == 1 and role == Qt.DisplayRole:
+            return card.title
+
+        # Column 2: Value from current row
+        if index.column() == 2 and role == Qt.DisplayRole:
+            _, val = self.sheets_model.current_items[card.id]
+            return str(val)
+
+        return None
+
+    def setData(self, index: QModelIndex, value, role=Qt.EditRole) -> bool:
+        # only tri‐state checkboxes in col 0
+        if (
+                index.isValid()
+                and index.column() == 0
+                and role == Qt.CheckStateRole
+                and value is not None
+        ):
+            try:
+                state = Qt.CheckState(value)
+            except ValueError:
+                return False
+            card = self._card_by_row(index.row())
+            self.cardtable.update_visibility(card.id, state)
+            self.dataChanged.emit(index, index, [Qt.CheckStateRole])
+            return True
+        return False
+
+    def flags(self, index: QModelIndex):
+        if not index.isValid():
+            return Qt.NoItemFlags
+        base = Qt.ItemIsEnabled | Qt.ItemIsSelectable
+        if self._show_all:
+            if index.column() == 0:
+                base |= Qt.ItemIsUserCheckable | TRI_FLAG
+            base |= Qt.ItemIsDragEnabled | Qt.ItemIsDropEnabled
+        return base
+
+    # ─── Drag‐&‐Drop support ─────────────────────────────────
+
+    def supportedDropActions(self):
+        return Qt.MoveAction
+
+    def mimeTypes(self):
+        return ["application/x-qabstractitemmodeldatalist"]
+
+    def mimeData(self, indexes):
+        md = super().mimeData(indexes)
+        # capture the exact card IDs being dragged
+        self._drag_ids = {
+            self._card_by_row(ix.row()).id
+            for ix in indexes
+            if ix.isValid() and ix.column() == 0
+        }
+        return md
+
+    def dropMimeData(self, mime: QMimeData, action, row, column, parent) -> bool:
+        print(">>> dropMimeData called")
+        if action != Qt.MoveAction or not self._show_all:
+            print("[ABORT] Move not allowed (action or mode)")
+            return super().dropMimeData(mime, action, row, column, parent)
+
+        if not self._drag_ids:
+            print("[INFO] No drag IDs found")
+            return False
+
+        dest_row = self._compute_dest_row(row, parent)
+        print(f"[STEP] Destination row: {dest_row}")
+
+        full_ids = self._ordered_card_ids()
+        print(f"[STEP] Full ordered IDs: {full_ids}")
+
+        vis_ids = self._visible_card_ids(full_ids)
+        print(f"[STEP] Visible IDs: {vis_ids}")
+
+        old_positions = self._dragged_positions(vis_ids)
+        if old_positions is None:
+            print("[FAIL] Dragged positions could not be determined")
+            return False
+
+        print(f"[STEP] Dragged old positions: {old_positions}")
+
+        first, last = min(old_positions), max(old_positions)
+        count = last - first + 1
+        print(f"[STEP] Block: first={first}, last={last}, count={count}")
+
+        if dest_row > last:
+            dest_row -= count
+            print(f"[STEP] Adjusted dest_row after drop below block: {dest_row}")
+
+        if first <= dest_row <= last:
+            print(f"[WARN] dest_row={dest_row} inside block [{first}..{last}] → no-op")
+            return False
+
+        moving = vis_ids[first: last + 1]
+        remaining = vis_ids[:first] + vis_ids[last + 1:]
+        new_vis = remaining[:dest_row] + moving + remaining[dest_row:]
+
+        print(f"[STEP] Moving: {moving}")
+        print(f"[STEP] New visible order: {new_vis}")
+
+        if moving == vis_ids[first:dest_row]:
+            print(f"[SKIP] Move has no effect → same slice")
+            return False
+
+        new_full = self._rebuild_full_ids(full_ids, vis_ids, new_vis)
+        print(f"[STEP] New full ID order: {new_full}")
+
+        total_rows = self.rowCount()
+        if first < 0 or last >= total_rows or dest_row > total_rows:
+            print(f"[ERROR] Invalid Qt move index range: {first}–{last} → {dest_row} (rows={total_rows})")
+            return False
+
+        print(f"[MOVE] beginMoveRows({first} → {last}) → {dest_row}")
+
+        try:
+            self.beginMoveRows(QModelIndex(), first, last, QModelIndex(), dest_row)
+        except Exception as e:
+            print("[CRITICAL] beginMoveRows failed:", e)
+            return False
+
+        with QSignalBlocker(self.cardtable):
+            self.cardtable.reorder_by_list(new_full)
+            print("[STEP] .reorder_by_list applied")
+
+        self.endMoveRows()
+        print("[DONE] endMoveRows")
+        return True
+
+    # ─── Headers ───────────────────────────────────────────────
+
+    def headerData(self, section: int, orientation, role=Qt.DisplayRole):
+        if orientation == Qt.Horizontal and role == Qt.DisplayRole:
+            return {0: "✓", 1: "Field", 2: "Value"}.get(section, "")
+        return super().headerData(section, orientation, role)
+
+    # ─── Helpers ────────────────────────────────────────────────
+
+    def _reset_model(self):
+        """Reset the entire view when domain order/visibility changes."""
+        print("[DEBUG] reset model triggered")
+        self.beginResetModel()
+        self.endResetModel()
+
+    def _compute_dest_row(self, row, parent):
+        if row >= 0:
+            return row
+        elif parent.isValid():
+            return parent.row()
+        return self.rowCount()
+
+    def _ordered_card_ids(self):
+        return [c.id for c in sorted(self.cardtable.cards, key=lambda c: c.order)]
+
+    def _visible_card_ids(self, full_ids):
+        return [
+            cid for cid in full_ids
+            if self.cardtable.by_id(cid).show or self._show_all
+        ]
+
+    def _dragged_positions(self, vis_ids):
+        try:
+            return [vis_ids.index(cid) for cid in self._drag_ids]
+        except ValueError as e:
+            print("[ERROR] Dragged ID not in visible list:", e)
+            return None
+
+    def _rebuild_full_ids(self, full_ids, vis_ids, new_vis):
+        it = iter(new_vis)
+        return [next(it) if cid in vis_ids else cid for cid in full_ids]

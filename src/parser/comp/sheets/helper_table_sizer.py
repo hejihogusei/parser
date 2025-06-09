@@ -2,47 +2,36 @@
 from __future__ import annotations
 from PySide6.QtGui import QFontMetrics
 
-def chars_to_px(widget, n: int, pad: int = 0) -> int:
-    #   converts characters len to pixel width for UI widget
-    fm: QFontMetrics = widget.fontMetrics()
-    return fm.averageCharWidth() * int(0.95 * n) + pad
-
-
-def set_initial_sizing(widget, model) -> None:
-    """
-    One-off sizing: sets default row height, column widths, min widget width.
-    called from the main controller
-    """
-    tbl = widget.table
+def set_initial_sizing(view, model) -> None:
+    tbl = view.table  # now a QTableView
     hdr = tbl.horizontalHeader()
-    tbl.resizeRowsToContents()
 
-    # row height equals header height
+    # row heights
     row_h = hdr.height()
     tbl.verticalHeader().setDefaultSectionSize(row_h)
+    tbl.resizeRowsToContents()
 
-    # fixed columns for 'Select'
-    tbl.setColumnWidth(widget.COL_SELECT, 30)
+    # fixed “select” column
+    tbl.setColumnWidth(view.COL_SELECT, 30)
 
-    # 'Field' column px from title len
-    field_width = chars_to_px(widget, model.title_len)
-    #print(f"field_width: {field_width}")
-    tbl.setColumnWidth(widget.COL_FIELD, field_width)
+    # compute Field-column width using header font
+    fm_field = hdr.fontMetrics()
+    field_w = int(fm_field.averageCharWidth() * 0.85 * model.title_len)
+    tbl.setColumnWidth(view.COL_FIELD, field_w)
 
-    # 'Value' column px from average cell size; still stretch last section
-    value_width= chars_to_px(widget, model.value_len)
-    #print(f"value_width: {value_width}")
-    tbl.setColumnWidth(widget.COL_VALUE, value_width)
+    # compute Value-column width using table’s font
+    fm_value = tbl.fontMetrics()
+    val_w    = int(fm_value.averageCharWidth() * 0.85 * model.value_len)
+    tbl.setColumnWidth(view.COL_VALUE, val_w)
+
     hdr.setStretchLastSection(True)
 
-    # min overall width plus 10%
-    tbl.setMinimumWidth( int((field_width + value_width)*1.10) )
+    # overall width +10%
+    tbl.setMinimumWidth(int((field_w + val_w) * 1.1))
 
-    # ─────── min overall height (rows × row_h) ───────
-    row_count   = model.cards_count       # total columns = card rows
-    #print(f"row_count: {row_count}")
-    frame       = tbl.frameWidth() * 2          # top + bottom frame
-    #print(f"frame: {frame}")
-    total       = row_h * row_count + row_h + frame
-    #print(f"table height: {total}")
-    tbl.setMinimumHeight( int(total * 1.00) )
+    # overall height = (rows + header) × row_h + frame
+    rows   = model.cards_count
+    frame  = tbl.frameWidth() * 2
+    height = row_h * (rows + 1) + frame
+    tbl.setMinimumHeight(int(height * 0.95))
+

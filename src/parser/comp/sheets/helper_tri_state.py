@@ -1,70 +1,57 @@
 # src/parser/comp/sheets/helper_tri_state.py
+
 from __future__ import annotations
 from PySide6.QtCore    import Qt, QEvent
 from PySide6.QtWidgets import QStyledItemDelegate
 
 
-# ─────────────────────────  helpers  ──────────────────────────
-def tri_flag() -> int:
+def tri_flag() -> Qt.ItemFlag:
     """
-    Return `Qt.ItemIsTristate` that works on the current PySide build.
-    Raises if the build has no user-clickable tri-state support.
+    Return the correct tristate‐checkbox flag on this Qt build.
     """
-    # Qt 6 namespaced enum
-    if hasattr(Qt.ItemFlag, "ItemIsTristate"):
-        return Qt.ItemFlag.ItemIsTristate
-
-    if hasattr(Qt.ItemFlag, "ItemIsAutoTristate"):
-        return Qt.ItemFlag.ItemIsAutoTristate
-
-    # Fallback: some builds expose only 'ItemIsAutoTristate'
+    # top‐level
+    if hasattr(Qt, "ItemIsTristate"):
+        return Qt.ItemIsTristate
     if hasattr(Qt, "ItemIsAutoTristate"):
         return Qt.ItemIsAutoTristate
+    # namespaced under ItemFlag
+    if hasattr(Qt.ItemFlag, "ItemIsTristate"):
+        return Qt.ItemFlag.ItemIsTristate
+    if hasattr(Qt.ItemFlag, "ItemIsAutoTristate"):
+        return Qt.ItemFlag.ItemIsAutoTristate
+    return Qt.NoItemFlags
 
-    # Last resort: no tri-state available
-    return 0
+
+TRI_FLAG = tri_flag()
 
 
-TRI_FLAG = tri_flag()        # exported constant
-
-
-# ──────────────────────  delegate class  ─────────────────────
 class TriStateDelegate(QStyledItemDelegate):
     """
-    Delegate that cycles ☐  ▣  ☑  states on every user activation.
-    Install per column:
-
-        from .tri_state_delegate import TriStateDelegate, TRI_FLAG
-        self.table.setItemDelegateForColumn(select_col, TriStateDelegate(self.table, self.model))
+    Delegate to cycle ☑ → ☐ → ▣ → ☑ in column 0 of CardTableQtModel.
+    After each click it calls model.setData(..., CheckStateRole),
+    letting your Qt‐model (CardTableQtModel) update the CardTableModel
+    and emit the right signals.
     """
-    def __init__(self, table, model):
-        super().__init__(table)
-        self.model = model
 
     CYCLE = {
-        Qt.Checked:             Qt.Unchecked,  # ✔ → □
-        Qt.Unchecked:           Qt.PartiallyChecked,  # □ → ▣
-        Qt.PartiallyChecked:    Qt.Checked,  # ▣ → ✔
-        None:                   Qt.Checked,  # safety fallback
+        Qt.Checked:           Qt.Unchecked,
+        Qt.Unchecked:         Qt.PartiallyChecked,
+        Qt.PartiallyChecked:  Qt.Checked,
+        None:                 Qt.Checked,
     }
-    # ----------------------------------------------------------
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
     def editorEvent(self, event, model, option, index):
-        # Handle mouse-release, key-press etc.
-        if (event.type() == QEvent.MouseButtonRelease ):
-            state = index.data(Qt.CheckStateRole)
-            # Normalize to Qt.CheckState
+        # only intercept mouse‐release in the checkbox column
+        if index.column() == 0 and event.type() == QEvent.MouseButtonRelease:
+            current = model.data(index, Qt.CheckStateRole)
             try:
-                state = Qt.CheckState(state)
-            except ValueError:
-                state = None
-            next_state = self.CYCLE.get(state, Qt.Checked)
-            model.setData(index, next_state, Qt.CheckStateRole)
-
-            # Update underlying card model directly
-            self.model.cardtable.update_visibility(index.row(), next_state)
-
-            return True                                   # event handled
+                current = Qt.CheckState(current)
+            except (ValueError, TypeError):
+                current = None
+            nxt = self.CYCLE.get(current, Qt.Checked)
+            model.setData(index, nxt, Qt.CheckStateRole)
+            return True
         return super().editorEvent(event, model, option, index)
-
-
-
